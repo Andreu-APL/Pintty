@@ -60,6 +60,8 @@ pub fn dispatch(state: *OverlayState.OverlayState, json_str: []const u8) !void {
         doUnwire(state, obj);
     } else if (std.mem.eql(u8, action, "pulse")) {
         doPulse(state, obj);
+    } else if (std.mem.eql(u8, action, "status")) {
+        doStatus(state, obj);
     } else if (std.mem.eql(u8, action, "scene_save")) {
         if (getString(obj, "name")) |n| Scenes.save(state, n) catch |e| log.warn("scene_save err={}", .{e});
     } else if (std.mem.eql(u8, action, "scene_load")) {
@@ -259,6 +261,20 @@ fn doUnwire(state: *OverlayState.OverlayState, obj: std.json.ObjectMap) void {
     const idx = findWireIndex(state, id) orelse return;
     state.freeWire(state.wires.swapRemove(idx));
     log.info("unwire id={s}", .{id});
+}
+
+fn doStatus(state: *OverlayState.OverlayState, obj: std.json.ObjectMap) void {
+    const id = getString(obj, "id") orelse return;
+    const idx = findIndex(state, id) orelse return;
+    // Accept either a semantic state name or a raw integer code.
+    const code: i32 = if (getString(obj, "state")) |s| blk: {
+        if (std.mem.eql(u8, s, "active") or std.mem.eql(u8, s, "busy") or std.mem.eql(u8, s, "thinking")) break :blk 1;
+        if (std.mem.eql(u8, s, "alert") or std.mem.eql(u8, s, "error")) break :blk 2;
+        if (std.mem.eql(u8, s, "ok") or std.mem.eql(u8, s, "done") or std.mem.eql(u8, s, "success")) break :blk 3;
+        break :blk 0; // "idle" / "none" / anything else
+    } else getInt(obj, "code") orelse 0;
+    state.panels.items[idx].status = code;
+    log.debug("status id={s} code={d}", .{ id, code });
 }
 
 fn doPulse(state: *OverlayState.OverlayState, obj: std.json.ObjectMap) void {

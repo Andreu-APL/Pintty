@@ -16,6 +16,9 @@ pub const Panel = struct {
     scroll_delta: f32 = 0.0,
     // Z-plane this panel lives on. Distance from the active layer drives ambient depth.
     layer: i32 = 0,
+    // Ambient status drives the panel's rim glow: 0 idle, 1 active/working,
+    // 2 alert, 3 ok/done. Set via the `status` action; purely cosmetic.
+    status: i32 = 0,
 };
 
 // A directed dataflow link drawn between two panels/windows. Endpoints track the
@@ -214,6 +217,7 @@ pub const PanelSnapshot = extern struct {
     content: [2048]u8,
     content_len: usize,
     layer: i32,
+    status: i32,        // ambient rim glow: 0 idle, 1 active, 2 alert, 3 ok
 };
 
 export fn pintty_overlay_consume_dirty(state: *OverlayState) bool {
@@ -260,6 +264,7 @@ export fn pintty_overlay_snapshot(
         buf[i].content[c_len] = 0;
         buf[i].content_len = c_len;
         buf[i].layer = p.layer;
+        buf[i].status = p.status;
     }
     return count;
 }

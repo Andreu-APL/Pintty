@@ -261,6 +261,7 @@ final class PinttyOverlayView: NSView {
             if let pl = panelLayers[id] {
                 pl.setTitle(title)
                 pl.setContent(content, type: contentType)
+                pl.setStatus(Int(snap.status))
                 pl.isHidden = snap.visible == 0
 
                 // Skip position update while the user is dragging this panel.

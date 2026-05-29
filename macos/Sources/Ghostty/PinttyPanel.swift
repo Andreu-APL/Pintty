@@ -36,6 +36,7 @@ final class PinttyPanelLayer: CALayer {
     private var contentHeight:      CGFloat = 0  // calculated wrapped height
     private var geoRenderGen:       Int = 0       // incremented to cancel stale geo renders
     private var lastGeoSize:        CGSize = .zero
+    private var currentStatus:      Int = 0       // ambient rim-glow state (see setStatus)
 
     // MARK: - Computed helpers
 
@@ -271,6 +272,38 @@ final class PinttyPanelLayer: CALayer {
 
     func setCollapsed(_ collapsed: Bool) {
         contentClipLayer.isHidden = collapsed
+    }
+
+    /// Apply an ambient status rim glow. Codes: 0 idle, 1 active/working, 2 alert,
+    /// 3 ok/done. Animates the border stroke (not a shadow — the panel masks to its
+    /// bounds, so an outer shadow would be clipped). `active`/`alert` breathe; `ok`
+    /// holds steady. Idempotent per code so the animation isn't restarted each tick.
+    func setStatus(_ code: Int) {
+        guard code != currentStatus else { return }
+        currentStatus = code
+
+        borderLayer.removeAnimation(forKey: "status.glow")
+
+        guard let color = PinttyColors.statusColor(code) else {
+            // Idle: restore the resting rim.
+            borderLayer.strokeColor = PinttyColors.panelBorderDim.cgColor
+            borderLayer.lineWidth   = 1.0
+            return
+        }
+
+        borderLayer.strokeColor = color.cgColor
+        borderLayer.lineWidth   = 1.5
+
+        // ok/done holds steady; active/alert breathe.
+        guard code != 3 else { return }
+        let breathe = CABasicAnimation(keyPath: "strokeColor")
+        breathe.fromValue      = color.withAlphaComponent(0.35).cgColor
+        breathe.toValue        = color.cgColor
+        breathe.duration       = code == 2 ? 0.7 : 1.4   // alert pulses faster
+        breathe.autoreverses   = true
+        breathe.repeatCount    = .greatestFiniteMagnitude
+        breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        borderLayer.add(breathe, forKey: "status.glow")
     }
 
     /// Apply an absolute pixel scroll offset (clamped to content bounds).

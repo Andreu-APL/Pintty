@@ -1223,6 +1223,7 @@ typedef struct {
     char content[2048];
     size_t content_len;
     int32_t layer;          // z-plane; distance from active layer drives ambient depth
+    int32_t status;         // ambient rim glow: 0 idle, 1 active, 2 alert, 3 ok
 } pintty_panel_snapshot_s;
 
 GHOSTTY_API pintty_overlay_state_t pintty_app_overlay_state(ghostty_app_t);

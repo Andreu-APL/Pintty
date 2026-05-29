@@ -66,6 +66,20 @@ enum PinttyColors {
     /// Faded accent for tracks / inactive lines.
     static var accentDim: NSColor { accent.withAlphaComponent(0.35) }
 
+    // MARK: - Ambient status (per-panel rim glow)
+
+    /// Rim color for a panel's ambient status. `active` reuses the theme accent so
+    /// "working" reads as a breathing version of the normal highlight; alert/ok are
+    /// vivid red/green for at-a-glance state. `idle` returns nil (no status ring).
+    static func statusColor(_ code: Int) -> NSColor? {
+        switch code {
+        case 1:  return accent
+        case 2:  return NSColor(displayP3Red: 1.000, green: 0.231, blue: 0.235, alpha: 1)
+        case 3:  return NSColor(displayP3Red: 0.000, green: 0.851, blue: 0.451, alpha: 1)
+        default: return nil
+        }
+    }
+
     // MARK: - Terminal windows (live PTY surfaces with chrome)
 
     static let terminalWindowBg     = NSColor(displayP3Red: 0.90, green: 0.93, blue: 0.98, alpha: 0.40)
