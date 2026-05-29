@@ -596,9 +596,13 @@ final class PinttyOverlayView: NSView {
             // Only the four real chord modifiers; ignore incidental flags (capsLock, numericPad,
             // function) which the keypad/laptop keys can carry.
             let mods = event.modifierFlags.intersection([.command, .shift, .control, .option])
+            // Match symbol shortcuts by typed character, not physical key position — the
+            // ANSI keycodes for "/", "-", "=", "0" land on different keys under non-US
+            // layouts (e.g. Latin American), so keycode matching misfires there.
+            let chars = event.charactersIgnoringModifiers ?? ""
 
             // Cmd+/ → toggle the keybind cheat-sheet. Esc dismisses it when shown.
-            if mods == [.command], event.keyCode == self.kVK_ANSI_Slash {
+            if mods == [.command], chars == "/" {
                 self.toggleCheatSheet()
                 return nil
             }
@@ -626,14 +630,15 @@ final class PinttyOverlayView: NSView {
             }
 
             // Cmd +/-/0 → resize the interior text (font size) of a shell window, like a
-            // normal terminal. Accept Cmd and Cmd+Shift (so both Cmd+= and Cmd++ zoom in).
+            // normal terminal. Match by character so it works on any layout: "+"/"=" zoom
+            // in (with or without Shift), "-"/"_" zoom out, "0" resets.
             if mods == [.command] || mods == [.command, .shift] {
-                switch event.keyCode {
-                case self.kVK_ANSI_Equal, self.kVK_ANSI_KeypadPlus:
+                switch chars {
+                case "+", "=":
                     if self.changeShellFontSize(.increase(1)) { return nil }
-                case self.kVK_ANSI_Minus, self.kVK_ANSI_KeypadMinus:
+                case "-", "_":
                     if self.changeShellFontSize(.decrease(1)) { return nil }
-                case self.kVK_ANSI_0, self.kVK_ANSI_Keypad0:
+                case "0":
                     if mods == [.command], self.changeShellFontSize(.reset) { return nil }
                 default:
                     break
@@ -1150,19 +1155,21 @@ final class PinttyOverlayView: NSView {
 /// itself (more robust than dispatching mouseDown to a nested subview through the overlay's
 /// custom hitTest), so this returns nil from hitTest.
 private final class PinttyCloseChip: NSView {
-    private let glyph = CATextLayer()
+    // Vector "×" drawn as two crossing strokes — centers exactly, unlike a glyph
+    // layer whose baseline/line-box metrics make precise centering unreliable.
+    private let xLayer = CAShapeLayer()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = PinttyColors.terminalCloseButton.cgColor
         layer?.cornerRadius = frameRect.width / 2
-        glyph.string = "\u{00D7}"          // ×
-        glyph.fontSize = 13
-        glyph.foregroundColor = NSColor.white.cgColor
-        glyph.alignmentMode = .center
-        glyph.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
-        layer?.addSublayer(glyph)
+        xLayer.strokeColor = NSColor.white.cgColor
+        xLayer.lineWidth = 1.5
+        xLayer.lineCap = .round
+        xLayer.fillColor = nil
+        xLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
+        layer?.addSublayer(xLayer)
         alphaValue = 0
     }
 
@@ -1171,8 +1178,15 @@ private final class PinttyCloseChip: NSView {
     override func layout() {
         super.layout()
         layer?.cornerRadius = bounds.width / 2
-        let gh: CGFloat = 15
-        glyph.frame = CGRect(x: 0, y: (bounds.height - gh) / 2 - 1, width: bounds.width, height: gh)
+        xLayer.frame = bounds
+        let arm: CGFloat = 3.5             // half-length of each stroke from center
+        let cx = bounds.midX, cy = bounds.midY
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: cx - arm, y: cy - arm))
+        path.addLine(to: CGPoint(x: cx + arm, y: cy + arm))
+        path.move(to: CGPoint(x: cx - arm, y: cy + arm))
+        path.addLine(to: CGPoint(x: cx + arm, y: cy - arm))
+        xLayer.path = path
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
