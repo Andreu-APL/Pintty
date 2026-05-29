@@ -15,6 +15,8 @@ const Config = configpkg.Config;
 const BlockingQueue = @import("datastruct/main.zig").BlockingQueue;
 const renderer = @import("renderer.zig");
 const font = @import("font/main.zig");
+const IpcServer = @import("overlay/IpcServer.zig").IpcServer;
+const OverlayState = @import("overlay/OverlayState.zig").OverlayState;
 
 const log = std.log.scoped(.app);
 
@@ -69,6 +71,12 @@ config_conditional_state: configpkg.ConditionalState,
 /// if they are the first surface.
 first: bool = true,
 
+/// Shared overlay state read by the renderer and written by the IPC thread.
+overlay_state: OverlayState,
+
+/// Unix socket server that receives overlay panel commands.
+overlay_ipc: ?IpcServer = null,
+
 pub const CreateError = Allocator.Error || font.SharedGridSet.InitError;
 
 /// Create a new app instance. This returns a stable pointer to the app
@@ -99,10 +107,16 @@ pub fn init(
         .mailbox = .{},
         .font_grid_set = font_grid_set,
         .config_conditional_state = .{},
+        .overlay_state = OverlayState.init(alloc),
     };
+    self.startOverlayIpc();
 }
 
 pub fn deinit(self: *App) void {
+    // Clean up overlay
+    if (self.overlay_ipc) |*ipc| self.alloc.free(ipc.socket_path);
+    self.overlay_state.deinit();
+
     // Clean up all our surfaces
     for (self.surfaces.items) |surface| surface.deinit();
     self.surfaces.deinit(self.alloc);
@@ -113,6 +127,33 @@ pub fn deinit(self: *App) void {
     // should gracefully close all surfaces.
     assert(self.font_grid_set.count() == 0);
     self.font_grid_set.deinit();
+}
+
+fn startOverlayIpc(self: *App) void {
+    const home = std.posix.getenv("HOME") orelse {
+        log.warn("HOME unset, overlay IPC disabled", .{});
+        return;
+    };
+
+    const dir_path = std.fmt.allocPrint(self.alloc, "{s}/.pintty", .{home}) catch return;
+    defer self.alloc.free(dir_path);
+    std.fs.makeDirAbsolute(dir_path) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => log.warn("failed to create ~/.pintty err={}", .{err}),
+    };
+
+    const socket_path = std.fmt.allocPrint(self.alloc, "{s}/.pintty/overlay.sock", .{home}) catch return;
+    var ipc = IpcServer{
+        .allocator = self.alloc,
+        .socket_path = socket_path,
+        .state = &self.overlay_state,
+    };
+    ipc.start() catch |err| {
+        log.warn("overlay IPC failed to start err={}", .{err});
+        self.alloc.free(socket_path);
+        return;
+    };
+    self.overlay_ipc = ipc;
 }
 
 pub fn destroy(self: *App) void {

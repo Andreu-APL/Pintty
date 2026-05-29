@@ -16,6 +16,7 @@ const internal_os = @import("../os/main.zig");
 const renderer = @import("../renderer.zig");
 const terminal = @import("../terminal/main.zig");
 const CoreApp = @import("../App.zig");
+const OverlayState = @import("../overlay/OverlayState.zig").OverlayState;
 const CoreInspector = @import("../inspector/main.zig").Inspector;
 const CoreSurface = @import("../Surface.zig");
 const configpkg = @import("../config.zig");
@@ -1440,6 +1441,11 @@ pub const CAPI = struct {
         v.terminate();
         global.alloc.destroy(v);
         core_app.destroy();
+    }
+
+    /// Return the overlay state singleton for this app.
+    export fn pintty_app_overlay_state(v: *App) *OverlayState {
+        return &v.core_app.overlay_state;
     }
 
     /// Update the focused state of the app.

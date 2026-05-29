@@ -72,6 +72,13 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
             ErrorView()
         case .ready:
             ZStack {
+                // Canvas mode hides the base terminal, so the window would lose its glass when
+                // unfocused. This always-active backdrop keeps the liquid-glass look persistent.
+                if PinttyCanvas.enabled {
+                    PinttyGlassBackdrop()
+                        .ignoresSafeArea()
+                }
+
                 VStack(spacing: 0) {
                     // If we're running in debug mode we show a warning so that users
                     // know that performance will be degraded.
@@ -106,6 +113,15 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                 }
                 // Ignore safe area to extend up in to the titlebar region if we have the "hidden" titlebar style
                 .ignoresSafeArea(.container, edges: ghostty.config.macosTitlebarStyle == .hidden ? .top : [])
+                // In canvas mode the base terminal surface is hidden so only the window's
+                // frosted glass + the floating overlay panels remain — transparent liquid glass.
+                .opacity(PinttyCanvas.enabled ? 0 : 1)
+
+                // Pintty overlay: GPU-composited floating panels driven by the
+                // overlay command API. Pass-through, so it's inert until a panel spawns.
+                if let app = ghostty.app {
+                    PinttyOverlayRepresentable(app: app)
+                }
 
                 if let surfaceView = lastFocusedSurface?.value {
                     TerminalCommandPaletteView(

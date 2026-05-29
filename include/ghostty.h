@@ -1201,6 +1201,80 @@ GHOSTTY_API void ghostty_set_window_background_blur(ghostty_app_t, void*);
 // Benchmark API, if available.
 GHOSTTY_API bool ghostty_benchmark_cli(const char*, const char*);
 
+//-------------------------------------------------------------------
+// Pintty overlay API
+
+typedef void* pintty_overlay_state_t;
+
+typedef struct {
+    float x_pct;
+    float y_pct;
+    float w_pct;
+    float h_pct;
+    uint8_t visible;        // 1 = visible, 0 = hidden
+    uint8_t focused;        // 1 = focused (topmost), 0 = unfocused
+    char title[128];
+    size_t title_len;
+    char id[64];
+    size_t id_len;
+    float scroll_delta;     // net lines scrolled since last snapshot (consumed on read)
+    char content_type[32];
+    size_t content_type_len;
+    char content[2048];
+    size_t content_len;
+    int32_t layer;          // z-plane; distance from active layer drives ambient depth
+} pintty_panel_snapshot_s;
+
+GHOSTTY_API pintty_overlay_state_t pintty_app_overlay_state(ghostty_app_t);
+GHOSTTY_API bool pintty_overlay_consume_dirty(pintty_overlay_state_t);
+GHOSTTY_API size_t pintty_overlay_snapshot(pintty_overlay_state_t,
+                                           pintty_panel_snapshot_s*,
+                                           size_t);
+GHOSTTY_API int32_t pintty_overlay_active_layer(pintty_overlay_state_t);
+
+// Remote cursor: a controller-driven pointer rendered above all panels.
+typedef struct {
+    float x_pct;
+    float y_pct;
+    uint8_t visible;        // 1 = shown, 0 = hidden
+    uint8_t click;          // one-shot click pulse (consumed on read)
+    char label[64];
+    size_t label_len;
+} pintty_cursor_snapshot_s;
+
+GHOSTTY_API void pintty_overlay_cursor(pintty_overlay_state_t, pintty_cursor_snapshot_s*);
+
+// Bidirectional channel: push a newline-terminated JSON event to every connected client.
+GHOSTTY_API void pintty_overlay_emit_event(pintty_overlay_state_t, const char*, size_t);
+
+// Spawn a live terminal window from the app's own UI (e.g. a new-window keybind).
+// Id must be unique (caller-generated); position/size in 0..1 canvas percentages.
+GHOSTTY_API void pintty_overlay_spawn_terminal(pintty_overlay_state_t, const char*, size_t,
+                                               float, float, float, float);
+
+// Remove a panel/window by id (app UI close), so it leaves the backend state.
+GHOSTTY_API void pintty_overlay_despawn(pintty_overlay_state_t, const char*, size_t);
+
+// Dataflow wire: a directed link drawn between two panels (from_id -> to_id).
+typedef struct {
+    char id[64];
+    size_t id_len;
+    char from_id[64];
+    size_t from_len;
+    char to_id[64];
+    size_t to_len;
+    char label[64];
+    size_t label_len;
+    uint32_t color;         // 0 = default neon; else packed 0xRRGGBB
+    float pulse;            // one-shot packet pulse intensity (consumed on read)
+    uint8_t active;         // 1 = drawn, 0 = hidden
+} pintty_wire_snapshot_s;
+
+GHOSTTY_API size_t pintty_overlay_wire_count(pintty_overlay_state_t);
+GHOSTTY_API size_t pintty_overlay_wires(pintty_overlay_state_t,
+                                        pintty_wire_snapshot_s*,
+                                        size_t);
+
 #ifdef __cplusplus
 }
 #endif
